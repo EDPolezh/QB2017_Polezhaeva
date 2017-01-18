@@ -118,7 +118,7 @@ In the R code chunk below, calculate the **summary statistics** (i.e., maximum, 
 
 ```{r}
 v <- c(16.4, 16.0, 10.1, 16.8, 20.5, NA, 20.2, 13.1, 24.8, 20.2, 25.0, 20.5, 30.5, 31.4, 27.1)
-
+summary(v)
 max(na.omit(v))
 min(na.omit(v))
 sum(na.omit(v))
@@ -209,14 +209,18 @@ In the R code chunk below, do the following:
 
 ```{r}
 meso.num <- meso[, 3:8]
-cor1 <- pairs(meso.num)
-cor1
+pairs(meso.num)
+cor1 <- cor(meso.num)
+print(cor1)
+
 ```
 
 
 ***Question 4***: Describe some of the general features based on the visualization and correlation analysis above?
 
-> Answer 4: 
+> Answer 4: Based on visualization and correlation analysis we can say that there is correlation between some parameters, for example almost linear relationship between TN and TIN(|correlation coefficient| -> 1), non-linear, but still strong correlation ZP~TP,TN,SRP,TIN,   TP~TN, TP~SRP, SPR~TIN. It's interesting that only concentration of Chrolophyll negatively correlates with all the considered parameters (nutrients concentration and ZP biomass). 
+
+
 
 In the R code chunk below, do the following:
 1) Redo the correlation analysis using the `corr.test()` function in the `psych` package with the following options: method = "pearson", adjust = "BH".
@@ -224,8 +228,9 @@ In the R code chunk below, do the following:
 3) Use the print command from the handout to see the results of each correlation analysis.
 
 ```{r}
-cor2 <- corr.test(meso.num, method = "pearson", adjust = "BH")
-cor2
+require(psych)
+cor2 <- corr.test(meso.num, method = "pearson", adjust ="BH")
+print(cor2, digits = 4, short=FALSE)
 ```
 
 ***Question 5***: Describe what you learned from `corr.test`. 
@@ -234,14 +239,20 @@ Specifically, are the results sensitive to whether you use parametric (i.e., Pea
 When should one use non-parametric methods instead of parametric methods?
 With the Pearson's method, is there evidence for false discovery rate due to multiple comparisons? Why is false discovery rate important?
 
-> ***Answer 5***: 
+> ***Answer 5***: corr.test function finds correlation, sample sizes, and probability values between elements of a data.frame.
+
+The results are sensitive weather we use parametric or non-parametric method. Parametric method (Pearson) measures the strength of the LINEAR relationship between normally distributed variable, while relationship between the variables is not linear, it may be more appropriate to use the Spearman rank correlation method.
+
+With the Pearson's method, there is evidence for false discovery rate due to multiple comparisons: p-values above the diagonal differ from non-adjusted for multiple tests.
+FDR is the proportion of discoveries that are false among all discoveries. This approach allows to adjust p-values that could result in reducing of false-positive results. 
 
 
 In the R code chunk below, use the `corrplot` function in the *corrplot* package to produce the ellipse correlation plot in the handout.
 
 ```{r}
-
-
+require(corrplot)
+corrplot(cor1, method = "ellipse")
+dev.off()
 ```
 
 ### Linear Regression
@@ -252,29 +263,36 @@ In the R code chunk below, do the following:
 3) Produce a plot of this regression analysis including the following: categorically labeled points, the predicted regression line with 95% confidence intervals, and the appropriate axis labels.
 
 ```{r}
+fitreg <- lm(ZP ~ TN, data = meso)
+summary(fitreg)
+plot(meso$TN, meso$ZP, ylim = c(0, 10), xlim = c(500, 5000), xlab = expression(paste("Total Nitrogen (", mu, "g/L)")), ylab = "Zooplankton Biomass (mg/L)", las = 1)
 
-
-
-
-
-
-
+text(meso$TN, meso$ZP, meso$NUTS, pos = 3, cex = 0.8)
+newTN <- seq(min(meso$TN), max(meso$TN), 10)
+regline <- predict(fitreg, newdata = data.frame(TN = newTN))
+lines(newTN, regline)
+conf95 <- predict(fitreg, newdata = data.frame(TN = newTN), interval = c("confidence"), level = 0.95, type = "response")
+matlines(newTN, conf95[, c("lwr", "upr")], type="l", lty = 2, lwd = 1, col = "black")
 ```
 
 ***Question 6***: Interpret the results from the regression model
 
-> ***Answer 6***:
 
+> ***Answer 6***: lm function is used to fit data to linear model. 
+According to regression model this equetion  best describes ZP~TN relation:
+ZP = 0.0013181TN + 0.697771  with adjusted R^2 = 0.5525
+The section 'Residuals' gives the difference between the experimental and predicted signals. 
 
 
 ***Question 7***: Explain what the `predict()` function is doing in our analyses.
 
-> ***Answer 7***:
+> ***Answer 7***: function predict() returns a line based on linear regression analysis of ZP~TN data.
 
 Using the R code chunk below, use the code provided in the handout to determine if our data meet the assumptions of the linear regression analysis. 
 
 ```{r}
-
+par(mfrow = c(2,2), mar = c(5.1, 4.1, 4.1, 2.1))
+plot(fitreg)
 ```
 
 + Upper left: is there a random distribution of the residuals around zero (horizontal line)?
@@ -292,13 +310,20 @@ Using the R code chunk below, do the following:
 5) Use a Tukey's HSD to identify which treatments are different. 
 
 ```{r}
+NUTS <- factor(meso$NUTS, levels = c('L', 'M', 'H'))
+zp.means <- tapply(meso$ZP, NUTS, mean)
+sem <- function(x){sd(na.omit(x))/sqrt(length(na.omit(x)))}
+zp.sem <- tapply(meso$ZP, NUTS, sem)
 
+bp <- barplot(zp.means, ylim = c(0, round(max(meso$ZP), digits = 0)), pch = 15, cex = 1.25, las = 1, cex.lab = 1.4, cex.axis = 1.25, xlab = "nutrient supply", ylab = "zooplankton biomass (mg/L)", names.arg = c("low", "medium", "high"))
 
+arrows(x0 = bp, y0 = zp.means, y1 = zp.means - zp.sem, angle = 90, length = 0.1, lwd = 1)
+arrows(x0 = bp, y0 = zp.means, y1 = zp.means + zp.sem, angle = 90, length = 0.1, lwd = 1)
 
+fitanova <- aov(ZP ~ NUTS, data = meso)
+summary(fitanova)
 
-
-
-
+TukeyHSD(fitanova)
 ```
 
 ***Question 8***: How do you interpret the ANOVA results relative to the regression results?
@@ -310,7 +335,8 @@ Do you have any concerns about this analysis?
 Using the R code chunk below, use the diagnostic code provided in the handout to determine if our data meet the assumptions of ANVOA (similar to regression). 
 
 ```{r}
-
+par(mfrow = c(2, 2), mar = c(5.1, 4.1, 4.1, 2.1))
+plot(fitanova)
 ```
 
 ## SYNTHESIS: SITE-BY-SPECIES MATRIX
@@ -338,11 +364,94 @@ The remaining columns of data refer to the biomass (µg/L) of different zooplank
   + CHYD = *Chydorus* sp. 
 
 ***Question 9***: With the visualization and statistical tools that we learned about in the Week 1 Handout, use the site-by-species matrix to assess whether and how different zooplankton taxa were responsible for the total biomass (ZP) response to nutrient enrichment. Describe what you learned below in the "Answer" section and include appropriate code in the R chunk.
-
+***Answer 9***: According to correlation analysis there is strong positive correlation between ZP biomass and following taxa: Simocephallus and Chydorus; and strong negative correlation:calanoid copepods, Diaphanasoma, naupuli, Daphnia lumholtzi. The most significant contribution in ZP biomass change was made by Chydorus (we can see it on bar plot).
+Unfortunately the analysis performed does not allow to compare  statistical weights.
 ```{r}
+zoop <- read.table("data/zoops.txt", sep = "\t", header = TRUE)
+zoop$sum <- zoop$CAL +zoop$DIAP + zoop$CYCL + zoop$BOSM + zoop$SIMO + zoop$CERI + zoop$NAUP + zoop$DLUM + zoop$CHYD
+str(zoop)
 
 
+NUTS.zoop <- factor(zoop$NUTS, levels = c('L', 'M', 'H'))
+CAL.means <- tapply(zoop$CAL, NUTS, mean)
+DIAP.means <- tapply(zoop$DIAP, NUTS, mean)
+CYCL.means <- tapply(zoop$CYCL, NUTS, mean)
+BOSM.means <- tapply(zoop$BOSM, NUTS, mean)
+SIMO.means <- tapply(zoop$SIMO, NUTS, mean)
+CERI.means <- tapply(zoop$CERI, NUTS, mean)
+NAUP.means <- tapply(zoop$NAUP, NUTS, mean)
+DLUM.means <- tapply(zoop$DLUM, NUTS, mean)
+CHYD.means <- tapply(zoop$CHYD, NUTS, mean)
+SUM.means <- tapply(zoop$sum, NUTS, mean)
+MEANS <- data.frame(CAL.means, DIAP.means, CYCL.means, BOSM.means, SIMO.means, CERI.means, NAUP.means, DLUM.means, CHYD.means, SUM.means)
 
+str(MEANS)
+
+cor3 <- cor(MEANS)
+print(cor3)
+
+require("psych")
+cor4 <- corr.test(MEANS, method = "pearson", adjust = "BH")
+print(cor4, digits = 3)
+pairs(zoop)
+
+#Bar Plots. Everything below this line may be ignored
+sem <- function(x){sd(na.omit(x))/sqrt(length(na.omit(x)))}
+CAL.sem <- tapply((zoop$CAL)/(zoop$sum), NUTS, sem)
+DIAP.sem <- tapply(zoop$DIAP/(zoop$sum), NUTS, sem)
+CYCL.sem <- tapply(zoop$CYCL/(zoop$sum), NUTS, sem)
+BOSM.sem <- tapply(zoop$BOSM/(zoop$sum), NUTS, sem)
+SIMO.sem <- tapply(zoop$SIMO/(zoop$sum), NUTS, sem)
+CERI.sem <- tapply(zoop$CERI/(zoop$sum), NUTS, sem)
+NAUP.sem <- tapply(zoop$NAUP/(zoop$sum), NUTS, sem)
+DLUM.sem <- tapply(zoop$DLUM/(zoop$sum), NUTS, sem)
+CHYD.sem <- tapply(zoop$CHYD/(zoop$sum), NUTS, sem)
+
+bp.CAL <- barplot(CAL.means / SUM.means * 100, ylim = c(0,100), pch = 15, cex = 1.25, las = 1, cex.lab = 1.4, cex.axis = 1.25, xlab = "nutrient supply", ylab = "% of calanoid copepods in ZP", names.arg = c("low", "medium", "high"))
+
+arrows(x0 = bp.CAL, y0 = CAL.means/SUM.means*100, y1 = (CAL.means/SUM.means - CAL.sem)*100, angle = 90, length = 0.1, lwd = 1)
+arrows(x0 = bp.CAL, y0 = CAL.means/SUM.means*100, y1 = (CAL.means/SUM.means + CAL.sem)*100, angle = 90, length = 0.1, lwd = 1)
+
+
+bp.DIAP <- barplot(DIAP.means/SUM.means*100, ylim = c(0,100), pch = 15, cex = 1.25, las = 1, cex.lab = 1.4, cex.axis = 1.25, xlab = "nutrient supply", ylab = "% of Diaphanasoma in ZP", names.arg = c("low", "medium", "high"))
+
+arrows(x0 = bp.DIAP, y0 = DIAP.means/SUM.means*100, y1 = (DIAP.means/SUM.means-DIAP.sem)*100, angle = 90, length = 0.1, lwd = 1)
+arrows(x0 = bp.DIAP, y0 = DIAP.means/SUM.means*100, y1 = (DIAP.means/SUM.means + DIAP.sem)*100, angle = 90, length = 0.1, lwd = 1)
+
+bp.CYCL <- barplot(CYCL.means/SUM.means*100, ylim = c(0,100), pch = 15, cex = 1.25, las = 1, cex.lab = 1.4, cex.axis = 1.25, xlab = "nutrient supply", ylab = "% of CYCL in ZP", names.arg = c("low", "medium", "high"))
+
+arrows(x0 = bp.CYCL, y0 = CYCL.means/SUM.means*100, y1 = (CYCL.means/SUM.means-CYCL.sem)*100, angle = 90, length = 0.1, lwd = 1)
+arrows(x0 = bp.CYCL, y0 = CYCL.means/SUM.means*100, y1 = (CYCL.means/SUM.means + CYCL.sem)*100, angle = 90, length = 0.1, lwd = 1)
+
+bp.BOSM <- barplot(BOSM.means/SUM.means*100, ylim = c(0,100), pch = 15, cex = 1.25, las = 1, cex.lab = 1.4, cex.axis = 1.25, xlab = "nutrient supply", ylab = "% of BOSM in ZP", names.arg = c("low", "medium", "high"))
+
+arrows(x0 = bp.BOSM, y0 = BOSM.means/SUM.means*100, y1 = (BOSM.means/SUM.means-BOSM.sem)*100, angle = 90, length = 0.1, lwd = 1)
+arrows(x0 = bp.BOSM, y0 = BOSM.means/SUM.means*100, y1 = (BOSM.means/SUM.means + BOSM.sem)*100, angle = 90, length = 0.1, lwd = 1)
+
+bp.SIMO <- barplot(SIMO.means/SUM.means*100, ylim = c(0,100), pch = 15, cex = 1.25, las = 1, cex.lab = 1.4, cex.axis = 1.25, xlab = "nutrient supply", ylab = "% of SIMO in ZP", names.arg = c("low", "medium", "high"))
+
+arrows(x0 = bp.SIMO, y0 = SIMO.means/SUM.means*100, y1 = (SIMO.means/SUM.means-SIMO.sem)*100, angle = 90, length = 0.1, lwd = 1)
+arrows(x0 = bp.SIMO, y0 = SIMO.means/SUM.means*100, y1 = (SIMO.means/SUM.means + SIMO.sem)*100, angle = 90, length = 0.1, lwd = 1)
+
+bp.CERI <- barplot(CERI.means/SUM.means*100, ylim = c(0,100), pch = 15, cex = 1.25, las = 1, cex.lab = 1.4, cex.axis = 1.25, xlab = "nutrient supply", ylab = "% of CERI in ZP", names.arg = c("low", "medium", "high"))
+
+arrows(x0 = bp.CERI, y0 = CERI.means/SUM.means*100, y1 = (CERI.means/SUM.means-CERI.sem)*100, angle = 90, length = 0.1, lwd = 1)
+arrows(x0 = bp.CERI, y0 = CERI.means/SUM.means*100, y1 = (CERI.means/SUM.means + CERI.sem)*100, angle = 90, length = 0.1, lwd = 1)
+
+bp.NAUP <- barplot(NAUP.means/SUM.means*100, ylim = c(0,100), pch = 15, cex = 1.25, las = 1, cex.lab = 1.4, cex.axis = 1.25, xlab = "nutrient supply", ylab = "% of NAUP in ZP", names.arg = c("low", "medium", "high"))
+
+arrows(x0 = bp.NAUP, y0 = NAUP.means/SUM.means*100, y1 = (NAUP.means/SUM.means-NAUP.sem)*100, angle = 90, length = 0.1, lwd = 1)
+arrows(x0 = bp.NAUP, y0 = NAUP.means/SUM.means*100, y1 = (NAUP.means/SUM.means + NAUP.sem)*100, angle = 90, length = 0.1, lwd = 1)
+
+bp.DLUM <- barplot(DLUM.means/SUM.means*100, ylim = c(0,100), pch = 15, cex = 1.25, las = 1, cex.lab = 1.4, cex.axis = 1.25, xlab = "nutrient supply", ylab = "% of DLUM in ZP", names.arg = c("low", "medium", "high"))
+
+arrows(x0 = bp.DLUM, y0 = DLUM.means/SUM.means*100, y1 = (DLUM.means/SUM.means-DLUM.sem)*100, angle = 90, length = 0.1, lwd = 1)
+arrows(x0 = bp.DLUM, y0 = DLUM.means/SUM.means*100, y1 = (DLUM.means/SUM.means +DLUM.sem)*100, angle = 90, length = 0.1, lwd = 1)
+
+bp.CHYD <- barplot(CHYD.means/SUM.means*100, ylim = c(0,100), pch = 15, cex = 1.25, las = 1, cex.lab = 1.4, cex.axis = 1.25, xlab = "nutrient supply", ylab = "% of CHYD in ZP", names.arg = c("low", "medium", "high"))
+
+arrows(x0 = bp.CHYD, y0 = CHYD.means/SUM.means*100, y1 = (CHYD.means/SUM.means-CHYD.sem)*100, angle = 90, length = 0.1, lwd = 1)
+arrows(x0 = bp.CHYD, y0 = CHYD.means/SUM.means*100, y1 = (CHYD.means/SUM.means +CHYD.sem)*100, angle = 90, length = 0.1, lwd = 1)
 
 ```
 
