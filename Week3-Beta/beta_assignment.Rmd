@@ -143,7 +143,7 @@ c.  Using your understanding of the equation $\beta_{w} = \gamma/\alpha$, how wo
 
 > ***Answer 3a***:  regional fish diversity $\gamma$ is proportional to product of average local diversity ($\alpha$) and turnover between two sites increased by 1.
 > ***Answer 3b***:  Site 1 is more similar to site 2 ( $\beta$ = 0.5) than 10 ( $\beta$ = 0.5)
-> ***Answer 3c***:  If $\beta$ is defined additively it means that beta-diversity is number of species that are, in averege, present in regional species pool but not present in each site within the region.
+> ***Answer 3c***:  If $\beta$ is defined additively it means that beta-diversity is number of species that are, in averege, present in regional species pool but not present in each site within the region. For example, if $\beta_{w} = 1$ it means that local site as diverse as regional pool and additive $\beta = 0$, but if additive $\beta = 1$ it means that local site has one less species than the region.
 
 ### The Resemblance Matrix
 In order to quantify $\beta$-diversity for more than two samples, we need to introduce a new primary ecological data structure: the **Resemblance Matrix**. 
@@ -219,7 +219,7 @@ gplots::heatmap.2(as.matrix(fish), distfun = function(x) vegdist(x, method = "br
 
 ***Question 6***: Based on cluster analyses and the introductory plots that we generated after loading the data, develop an ecological hypothesis for fish diversity the `doubs` data set? 
 
-> ***Answer 6***: 
+> ***Answer 6***: Based cluster analysis all sites can be divided into 4 groups. 1-14 : low diversity, but high abundance of present spesies, 15-19 : medium diversity, medium abundance; 20-30 (except 23-25) sites: high diversity and abundance of fish species, 23-25 sites: low diversity and abundance.  In general species diversity increases from upstream regions to downstream along with species abundance. There is only one region that does not follow this pattern (sites 23-25), that might be caused by environmental conditions.  
 
 ### C.  Ordination
 
