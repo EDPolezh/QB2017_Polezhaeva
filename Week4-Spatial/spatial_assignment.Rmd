@@ -1,6 +1,6 @@
 ---
 title: "Assignment: Spatial Diversity"
-author: "Student Name; Z620: Quantitative Biodiversity, Indiana University"
+author: "Evgeniya Polezhaeva; Z620: Quantitative Biodiversity, Indiana University"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: pdf_document
 geometry: margin=2.54cm
@@ -37,8 +37,9 @@ In the R code chunk below, provide the code to:
 3. Set your working directory to your "*/Week4-Spatial*" folder, and
 
 ```{r, results = 'hide'}
-
-
+rm(list=ls())
+getwd()
+setwd("/Users/epolezha/GitHub/QB2017_Polezhaeva/Week4-Spatial")
 ```
 
 ## 2) LOADING R PACKAGES
@@ -48,14 +49,20 @@ In the R code chunk below, do the following:
 1. Install and/or load the following packages: `vegan`, `sp`, `gstat`, `raster`, `RgoogleMaps`, `maptools`, `rgdal`, `simba`, `gplots`, `rgeos`
 
 ```{r, results = 'hide', message = FALSE, warning = FALSE} 
-
-
-
+package.list <- c('vegan', 'sp', 'gstat', 'raster', 'RgoogleMaps', 'maptools', 'rgdal', 'simba', 'gplots', 'rgeos') 
+for (package in package.list) {
+  if (!require(package, character.only=T, quietly=T)) { 
+    install.packages(package)
+    library(package, character.only=T)
+  } }
+require("rgdal")
 ```
 
 ***Question 1***:  What are the packages `simba`, `sp`, and `rgdal` used for?
 
-> ***Answer 1***:  
+> ***Answer 1***:  simba: Besides a function for the calculation of similarity measures with binary data (for instance presence/absence species data) the package contains some simple wrapper functions for reshaping species lists into matrices and vice versa and some other functions for further processing of similarity data.
+> sp : This package provides S4 classes for importing, manipulating and exporting spatial data in R, and for methods including print/show, plot, subset, [, [[, \$, names, dim, summary, and a number of methods specific to spatial data handling.
+> rgdal : Provides bindings to Frank Warmerdam's Geospatial Data Abstraction Library (GDAL) (>= 1.6.3) and access to projection/transformation operations from the PROJ.4 library. The GDAL and PROJ.4 libraries are external to the package, and, when installing the package from source, must be correctly installed first. Both GDAL raster and OGR vector map data can be imported into R, and GDAL raster data and OGR vector data exported. Use is made of classes defined in the sp package. Windows and Mac Intel OS X binaries (including GDAL, PROJ.4 and Expat) are provided on CRAN.
 
 
 ## 3) LOADING DATA
@@ -67,17 +74,19 @@ In the R code chunk below, use the example in the handout to do the following:
 4. Remove the first column (i.e., site names) from the OTU matrix.
 
 ```{r, results = 'hide', message = FALSE, warning = FALSE} 
-
-
+Ponds <- read.table(file = "BrownCoData/20130801_PondDataMod.csv", head = TRUE, sep = ",")
+OTUs <- read.table( file = "BrownCoData/SiteBySpecies.csv", head = TRUE, sep = ",")
+otu.names <- names(OTUs)
+OTUs <- as.data.frame(OTUs[-1])
 ```
 
 ***Question 2a***:  How many sites and OTUs are in the SiteBySpecies matrix? 
 
-> ***Answer 2a***:  
+> ***Answer 2a***:  51 sites, 16383 species
 
 ***Question 2b***:  What is the greatest species richness found among sites?
 
-> ***Answer 2b***:  
+> ***Answer 2b***:  3259
 
 
 ## 4) GENERATE MAPS
@@ -88,7 +97,12 @@ In the R code chunk below, do the following:
 This map will be centered on Brown County, Indiana (39.1 latitude, -86.3 longitude).
 
 ```{r}
-
+require("RgoogleMaps")
+lats <- as.numeric(Ponds[,3])
+lons <- as.numeric(Ponds[,4])
+newmap <- GetMap(center = c(39.1, -86.3), zoom = 10, destfile = "PondsMap.png", maptype = "terrain")
+PlotOnStaticMap(newmap, zoom = 10, cex = 2, col = 'blue') # Plot map in RStudio 
+PlotOnStaticMap(newmap, lats, lons, cex = 1, pch = 20, col = 'red', add = TRUE)
 ```
 
 ***Question 3***:  Briefly describe the geographical layout of our sites.
@@ -102,17 +116,17 @@ In the R code chunk below, do the following:
 
 ```{r}
 # 1. Import TreeCover.tif as a raster file.
-
+Tree.Cover <- raster("TreeCover/TreeCover.tif")
 # 2. Plot the % tree cover data
-
+plot(Tree.Cover, xlab = "Longitude", ylab = "Latitude", main = "Map of geospatial data for % tree cover, \nwater bodies, and sample sites")
 # 3. Import water bodies as a shapefile.
-
+Water.Bodies <- readShapeSpatial("water/water.shp")
 # 4. Plot the water bodies around our study area, i.e., Monroe County.
-
+plot(Water.Bodies, border = "cyan", axes = T, add =T)
 # 5. Convert lat-long data for ponds to georeferenced points.
-
+Refuge.Ponds <- SpatialPoints(cbind(lons, lats))
 # 6. Plot the refuge pond locations
-
+plot(Refuge.Ponds, line = "r", col = "red", pch = 20, cex =1.5, add = T)
 ```
 
 ***Question 4a***: What are datums and projections?
@@ -139,26 +153,40 @@ In the R code chunk below, do the following:
 Note: You will need to use some of the data transformations within the *semivariogram* section of the handout.
 
 ```{r, results = 'hide', message = FALSE, warning = FALSE}
+xy <- data.frame(env = Ponds$TDS, pond.name = Ponds$Sample_ID, lats = Ponds$lat, lons = Ponds$long)
+
 # 1) Calculate Bray-Curtis similarity between plots using the `vegdist()` function
-
+comm.dist <- 1 - vegdist(OTUs)
 # 2) Assign UTM lattitude and longitude data to 'lats' and 'lons' variables
-
+lats <- as.numeric(xy$lats)
+lons <- as.numeric(xy$lons)
 # 3) Calculate geographic distance between plots and assign to the variable 'coord.dist'
-
+coord.dist <- dist(as.matrix(lats, lons))
 # 4) Transform environmental data to numeric type, and assign to variable 'x1'
-
+x1 <- as.numeric(Ponds$"SpC")
 # 5) Using the `vegdist()` function in `simba`, calculate the Euclidean distance between the plots for environmental variables. Assign the result to the variable 'env.dist'
-
+env.dist <- vegdist(x1, "euclidean")
 # 6) Transform all distance matrices into database format using the `liste()` function in `simba`:
-
+comm.dist.ls <- liste(comm.dist, entry = "comm")
+env.dist.ls <- liste(env.dist, entry = "env")
+coord.dist.ls <- liste(coord.dist, entry = "dist")
 # 7) Create a data frame containing similarity of the environment and similarity of community.
-
+df <- data.frame(coord.dist.ls, env.dist.ls[,3], comm.dist.ls[,3])
 # 8) Attach the columns labels 'env' and 'struc' to the dataframe you just made.
-
+names(df)[4:5] <- c("env", "struc")
+attach(df)
 # 9) After setting the plot parameters, plot the distance-decay relationships, with regression lines in red.
-
+par(mfrow = c(1,2), pty = "s")
+plot(env, struc, xlab = "Environmentl Distance", ylab = "1 - Bray-Curtis", main = "Environment", col = "SteelBlue")
+OLS <- lm(struc ~ env)
+OLS
+abline(OLS, col = "red4")
+plot(dist, struc, xlab = "Geographic Distance", ylab = "1 - Bray-Curtis", main = "Community\nComposition", col = "darkorchid4")
+OLS <- lm(struc ~ dist)
+OLS
+abline(OLS, col = "red4")
 # 10) Use `simba` to calculates the difference in slope or intercept of two regression lines
-
+diffslope(env, struc, dist, struc)
 ```
 
 
@@ -181,13 +209,24 @@ In the R code chunk below, do the following:
 
 ```{r}
 # 1. Define an SSAD function
-
+ssad <- function(x){
+  ad <- c(2, 2)
+  ad <- OTUs[, otu]
+  ad = as.vector(t(x = ad))
+  ad = ad[ad>0]
+}
 # 2. Set plot parameters
-
+par(mfrow = c(2,2))
 # 3. Declare a counter variable
-
+ct <- 0
 # 4. Write a while loop to plot the SSADs of six species chosen at random 
-
+while (ct < 4){
+  otu <- sample(1:length(OTUs),1)
+  ad <- ssad(otu)
+  if (length(ad) >10 & sum(ad >100)){
+    ct <- ct +1
+    plot(density(ad), col = "red", xlab = "Site Abundance", ylab = "Probability Density", main = otu.names[otu])
+}}
 ```
 
 
