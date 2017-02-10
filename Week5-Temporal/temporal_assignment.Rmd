@@ -1,6 +1,6 @@
 ---
 title: "Assignment: Temporal Diversity"
-author: "Student Name; Z620: Quantitative Biodiversity, Indiana University"
+author: "Evgeniya POlezhaeva; Z620: Quantitative Biodiversity, Indiana University"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: pdf_document
 geometry: margin=2.54cm
@@ -41,10 +41,17 @@ In the R code chunk below, provide the code to:
 4. load any packages you need to complete the assignment.
 
 ```{r}
-
-
-
-
+rm(list=ls())
+getwd()
+setwd("~/GitHub/QB2017_Polezhaeva/Week5-Temporal/")
+package.list <- c('vegan', 'tidyr', 'dplyr', 'codyn', 'ggplot2', 'cowplot', 'Mullerplot', 'RColorBrewer', 'reshape2', 'lubricate', 'TTR', 'xtable', 'multcomp', 'pander', 'png', 'grid', 'tseries', 'nlme', 'forecast', 'lsmeans')
+for (package in package.list){
+  if (!require(package, character.only = T, quietly=T)){
+    install.packages(package, repos='https://cran.us.r-project.org')
+    library(package, character.only=T)
+  }
+}
+install.packages("tidyr")
 ```
 
 ## 2) LOADING DATA
@@ -55,9 +62,8 @@ In the R code chunk below, do the following:
 2. explore the structure of the dataset.
 
 ```{r}
-
-
-
+portal <- read.table("data/combined.csv", sep = ",", header = TRUE)
+str(portal)
 
 ```
 
@@ -66,8 +72,8 @@ In the R code chunk below, do the following:
 a.  How many plots are in `portal`?
 b.  How many rodent species are there in the `portal` dataset?
 
-> ***Answer 1a***:  
-> ***Answer 1b***:  
+> ***Answer 1a***:  24
+> ***Answer 1b***:  40
 
 ## 3) WRANGLING THE PORTAL DATASET
 
@@ -80,7 +86,35 @@ In the R code chunk below, do the following:
 5. Using the hypothesis testing tools you learned in the beta-diversity module, test the hypothesis that species abundances across sites vary as a factor of treatment type (i.e., plot_type). 
 
 ```{r}
+require("tidyr")
+portal <- unite(portal, col = date, c(year, month, day), sep = "-", remove =FALSE)
+portal <- unite(portal, col = taxon, c(genus, species), sep= "_", remove = F)
+time.by.species <- group_by(portal, year, plot_id) %>% count(taxon) %>% spread(key=taxon, value=n, fill=0)
+time.by.species <- as.data.frame(time.by.species)
+SbyS <- dplyr::filter(time.by.species, year == 1990)
+row.names(SbyS) <- SbyS$plot_id
+SbyS <- SbyS[-(1:2)]
 
+#Shannon/Simpson indexes
+ShanH <- function(x = ""){
+  H = 0
+  for (n_i in x){
+    if(n_i > 0) {
+      p = n_i / sum(x)
+      H = H - p*log(p) 
+    }
+  }
+  return(H)
+}
+ShanH()
+SimpD <- function(x = ""){
+  D = 0
+  N = sum(x)
+  for (n_i in x){
+    D = D + (n_i^2)/(N^2)
+  }
+  return(D)
+}
 ```
 
 ***Question 2***: Describe how different biodiversity estimates vary among sites.
