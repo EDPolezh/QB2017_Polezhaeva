@@ -1,10 +1,9 @@
 ---
 title: 'Assignment: Spatial Diversity'
 author: 'Evgeniya Polezhaeva; Z620: Quantitative Biodiversity, Indiana University'
-
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 geometry: margin=2.54cm
 ---
 
