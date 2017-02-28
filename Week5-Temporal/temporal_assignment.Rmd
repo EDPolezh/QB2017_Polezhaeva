@@ -43,15 +43,16 @@ In the R code chunk below, provide the code to:
 ```{r}
 rm(list=ls())
 getwd()
-setwd("~/GitHub/QB2017_Polezhaeva/Week5-Temporal/")
-package.list <- c('vegan', 'tidyr', 'dplyr', 'codyn', 'ggplot2', 'cowplot', 'Mullerplot', 'RColorBrewer', 'reshape2', 'lubricate', 'TTR', 'xtable', 'multcomp', 'pander', 'png', 'grid', 'tseries', 'nlme', 'forecast', 'lsmeans')
+setwd("D:/Jane/GitHub/QB2017_Polezhaeva/Week5-Temporal")
+package.list <- c('vegan', 'tidyr', 'dplyr', 'codyn', 'ggplot2', 'cowplot', 'MullerPlot', 'RColorBrewer', 'reshape2', 'lubridate', 'TTR', 'xtable', 'multcomp', 'pander', 'png', 'grid', 'tseries', 'nlme', 'forecast', 'lsmeans')
+
 for (package in package.list){
   if (!require(package, character.only = T, quietly=T)){
     install.packages(package, repos='https://cran.us.r-project.org')
     library(package, character.only=T)
   }
 }
-install.packages("tidyr")
+install.packages("MullerPlot")
 ```
 
 ## 2) LOADING DATA
@@ -64,7 +65,6 @@ In the R code chunk below, do the following:
 ```{r}
 portal <- read.table("data/combined.csv", sep = ",", header = TRUE)
 str(portal)
-
 ```
 
 ***Question 1***:  Describe some of the attributes of the `portal` dataset.  
@@ -95,26 +95,60 @@ SbyS <- dplyr::filter(time.by.species, year == 1990)
 row.names(SbyS) <- SbyS$plot_id
 SbyS <- SbyS[-(1:2)]
 
-#Shannon/Simpson indexes
-ShanH <- function(x = ""){
-  H = 0
-  for (n_i in x){
-    if(n_i > 0) {
-      p = n_i / sum(x)
-      H = H - p*log(p) 
-    }
-  }
-  return(H)
+#Shannon/Simpson indeces
+require('vegan')
+require('BiodiversityR')
+ShanH <- c()
+for (i in (1:nrow(SbyS))){
+  ShanH[i] <- diversity(SbyS[i,], index = "shannon")
 }
-ShanH()
-SimpD <- function(x = ""){
-  D = 0
-  N = sum(x)
-  for (n_i in x){
-    D = D + (n_i^2)/(N^2)
-  }
-  return(D)
+ShanH
+
+SimpD <- c()
+for (i in (1:nrow(SbyS))){
+  SimpD[i] <- diversity(SbyS[i,], index = "inv") #1/D
 }
+SimpD
+alphastat <- data.frame(SimpD,ShanH)
+rownames(alphastat) <-  rownames(SbyS)
+alphastat$plot_id <- rownames(alphastat)
+for (i in (1:nrow(alphastat))){
+  alphastat$plot_type[i] <- portal$plot_type[which((portal$plot_id) == alphastat$plot_id[i])]
+}
+
+
+#PCoA ordination
+require("stats")
+SbyS.db <- vegdist(SbyS, method = "bray")
+SbyS.pcoa <- cmdscale(SbyS.db, eig = TRUE, k = 3)
+explainvar1 <- round(SbyS.pcoa$eig[1] / sum(SbyS.pcoa$eig), 3) * 100 
+explainvar2 <- round(SbyS.pcoa$eig[2] / sum(SbyS.pcoa$eig), 3) * 100 
+explainvar3 <- round(SbyS.pcoa$eig[3] / sum(SbyS.pcoa$eig), 3) * 100 
+sum.eig <- sum(explainvar1, explainvar2, explainvar3) # The first 3 axes of PCoA explain 75% of variation
+par(mar = c(5, 5, 1, 2) + 0.1)
+plot(SbyS.pcoa$points[ ,1], SbyS.pcoa$points[ ,2],  xlab = paste("PCoA 1 (", explainvar1, "%)", sep = ""), ylab = paste("PCoA 2 (", explainvar2, "%)", sep = ""), pch = 16, cex = 2.0, type = "n", cex.lab = 1.5, cex.axis = 1.2, axes = FALSE)
+axis(side = 1, labels = T, lwd.ticks = 2, cex.axis = 1.2, las = 1) 
+axis(side = 2, labels = T, lwd.ticks = 2, cex.axis = 1.2, las = 1) 
+abline(h = 0, v = 0, lty = 3) 
+box(lwd = 2)
+points(SbyS.pcoa$points[ ,1], SbyS.pcoa$points[ ,2], pch = 19, cex = 3, bg = "gray", col = "gray") 
+text(SbyS.pcoa$points[ ,1], SbyS.pcoa$points[ ,2], labels = row.names(SbyS.pcoa$points))
+
+# PERMANOVA
+n_plots <- rownames(SbyS)
+treatment <- c()
+for (i in (1:nrow(SbyS))){
+  id <- rownames(SbyS)[i]
+  n <- c()
+  n <- which(portal$plot_id == id)
+  if (length(n) > 1){n <- n[1]}
+  treatment[i] <- as.character(portal$plot_type[n])
+}
+
+adonis(SbyS ~ treatment, method = "bray", permutations = 999)
+indval <- indicspecies::multipatt(SbyS, cluster = treatment, func = "IndVal.g", control = how(nperm=999))
+summary(indval)
+
 ```
 
 ***Question 2***: Describe how different biodiversity estimates vary among sites.
@@ -122,8 +156,8 @@ SimpD <- function(x = ""){
 a. Does diversity vary among sites? Does this correspond to treatment type?
 b. Is treatment type a significant predictor of site dissimilarity?
 
-> ***Answer 2a***: 
-> ***Answer 2b***:
+> ***Answer 2a***: Diversity varies among sites and weakly correlates with treatment type.
+> ***Answer 2b***:Treatment type is fair predictor of site dissimilarity (R2 = 0.6, F-value is 6.7)
 
 ## 4) TIME SERIES ANALYSIS
 In the R code chunk below, do the following:  
@@ -136,7 +170,41 @@ In the R code chunk below, do the following:
 6. Use the tools outlined in the Handout to create an ARMA model.
 
 ```{r}
+time.by.spec.2 <- filter(portal, taxa=="Rodent", plot_id !=2) %>% group_by(year, month, plot_id ) %>% count(taxon)
+time.by.spec.2$season <- NA
+time.by.spec.2$season <- time.by.spec.2$month %in% c(6:10)
+time.by.spec.2$season <- ifelse(time.by.spec.2$season ==T, "rain", "norain")
+group_by(time.by.spec.2, year, season)
 
+abund <- filter(time.by.spec.2, plot_id == 4) %>% group_by(year, season) %>% count(wt = n)
+abund$nn <- abund$nn * 4
+abund.ts <- ts(abund$nn, frequency =2, start = c(1977, 2))
+plot.ts(abund.ts, type = "l", ylab = "Rodent Abundance (#/hectar)", xlab = "Time (year)", las = 1, ylim = c(0, 500))
+
+#Smoothing
+abund.sm <- TTR::SMA(abund$nn, n=5)
+
+plot(abund.sm, type = 'l', col = 'red', ylab = "Rodent Abundance (#/hectar)", xlab = 'Sample', las = 1, ylim = c(0, 500), xlim =c(0, 50))
+lines(abund$nn, col='black')
+legend(0, 475, col = c('red', 'black'), lty=c(1,1), c('smooth', 'nonsmooth'), bty='n', cex=1)
+
+#Assumption of Stationarity
+adf.raw <- adf.test(abund.ts, alternative = 'stationary')
+adf.raw$p.value
+
+abund.ts.diff <- diff(abund.ts)
+adf.diff <- adf.test(abund.ts.diff, alternative = 'stationary')
+adf.diff$p.value
+
+acf(abund.ts)
+pacf(abund.ts)
+
+abund.arm <- auto.arima(abund.ts)
+abund.arm <- arima((abund.ts), c(0,0,1), seasonal = list(order = c(2,1,0), period = 2), include.mean = T)
+tsdiag(abund.arm)
+
+pred.arm <- predict(abund.arm, n.ahead = 20)
+ts.plot(abund.ts, pred.arm$pred, lty = c(1,3))
 ```
 
 ***Question 3***: Describe the results from your time series analysis.
@@ -145,8 +213,8 @@ a. Does your data meet the assumption of stationarity? If not, what does this vi
 b. What does the ACF function do and how does it relate to the ARMA model? How does this differ from the autocorrelation function (ACF)?
 c. What results can you conclude from your full ARMA model along with other methods outlined in the time series setcion of the Handout?
 
-> ***Answer 3a***:
-> ***Answer 3b***:
+> ***Answer 3a***:Our data does not meet the assumption of stationarity (p-value = 0.28). It  means that mean, variance and co-variance in the time series are affected by time. For further data analysis corrective measures should be taken to correct this effect.
+> ***Answer 3b***: Autocorrelation function shows the lags of the forecast errors and provides information about moving average component of the model.
 > ***Answer 3c***:
 
 ## 5) REPEATED MEASURES ANALYSIS OF VARIANCE (RM-ANOVA)
@@ -157,8 +225,46 @@ In the R code chunk below, do the following:
 3. Perform an RM-ANOVA and construct a F-test using the AR(1), compound symmetery, and unstructured covariance structures.
 
 ```{r}
+time.by.species <- group_by(portal, year, plot_id, plot_type) %>% count(taxon) %>% spread(key=taxon, value=n, fill=0)
+richness <- as.data.frame(rowSums(time.by.species[,-c(1:3)] >0)) 
+rich.all <- data.frame(time.by.species[,1:3,], richness)
+names(rich.all)[4] <- "richness" 
+rich.treat <- rich.all[which(rich.all$plot_type == "Control" | rich.all$plot_type == "Rodent Exclosure"),]
 
+SimpDiv <- as.data.frame(diversity(time.by.species[,-c(1:3)], "inv")) 
+SimpDiv.all <- data.frame(time.by.species[,1:3,], SimpDiv)
+names(SimpDiv.all)[4] <- "SimpDiv" 
+SimpDiv.treat <- SimpDiv.all[which(SimpDiv.all$plot_type == "Control" | SimpDiv.all$plot_type == "Rodent Exclosure"),]
+SimpDiv.treat.plot <- group_by(SimpDiv.treat, plot_type, year) %>% summarise(mean = mean(SimpDiv), sd = sd(SimpDiv), n = n(), sem = sd/sqrt(n))
+SimpDiv.plot <- ggplot(SimpDiv.treat.plot, aes(x=year, y=mean, color=plot_type)) + 
+  geom_line(size = 1, show.legend = T) +
+  geom_errorbar(aes(ymin=mean-sem, ymax=mean+sem), width=.1) +
+  xlim(1977, 2002) +
+  xlab("Year") +
+  ylab("SimpDiv") +
+  scale_color_grey()
+plot(SimpDiv.plot)
 
+SimpDiv.rm <- lme(SimpDiv ~ plot_type*year, random = ~ 1 | plot_id, correlation = corAR1(form = ~1 | plot_id), data = SimpDiv.treat)
+summary(SimpDiv.rm)
+anova(SimpDiv.rm)
+set.caption("RMANOVA for Portal")
+pander(anova(SimpDiv.rm))
+lsmeans(SimpDiv.rm, ~plot_type)
+
+SimpDiv.rm2 <- lme(SimpDiv ~ plot_type*year, random = ~ 1 | plot_id, correlation = corSymm(form = ~1 | plot_id), data = SimpDiv.treat)
+summary(SimpDiv.rm2)
+anova(SimpDiv.rm2)
+set.caption("RMANOVA for Portal")
+pander(anova(SimpDiv.rm2))
+lsmeans(SimpDiv.rm2, ~plot_type)
+
+SimpDiv.rm3 <- lme(SimpDiv ~ plot_type*year, random = ~ 1 | plot_id, correlation = corCompSymm(form = ~1 | plot_id), data = SimpDiv.treat)
+summary(SimpDiv.rm3)
+anova(SimpDiv.rm3)
+set.caption("RMANOVA for Portal")
+pander(anova(SimpDiv.rm3))
+lsmeans(SimpDiv.rm3, ~plot_type)
 ```
 
 ***Question 4***: Describe the results from your RM-ANOVA.
@@ -168,9 +274,10 @@ b. Is there a noticeable trend in the inverse of Simpson's diversity over time?
 c. What does the result of your F-test tell you? 
 d. Of the three RM-ANOVA models with different covariance structures, which one is best? How does this affect the interpretation of your data?  
 
-> ***Answer 4a***:
-> ***Answer 4b***:
-> ***Answer 4c***:
+> ***Answer 4a***: RM-ANOVA is analysis of variance for non-independent groups of data. RM ANOVA takes into account relationship between non-independetn parameters that allows analyse data over time and repeated treatments.
+> ***Answer 4b***: There is no noticable trend of invers Simpson diversity over time. In both treatment groups SimpDiversity has 2 maximums (1981-1982 and 1987-1989) and 2 minimums (84-86, 91-94). Significant difference in diversity between two treatmetns desappears by year 1993.
+> ***Answer 4c***: F-test: Neither plot_type nor year can explain the variation of diversity among sites but only their combination. 
+> ***Answer 4d***: 
 
 ## 6) TEMPORAL BETA DIVERSITY
 
@@ -182,7 +289,110 @@ In the R code chunk below, do the following:
 3. Visualize turnover within each group
 
 ```{r}
+portal.species.abunds <- group_by(portal, taxa,  year, plot_type) %>% count(taxon)
 
+portal.total.rodent <- turnover(df = filter(portal.species.abunds, taxa == "Rodent"), 
+                         time.var = "year", 
+                         species.var = "taxon", 
+                         abundance.var = "n", 
+                         replicate.var = "plot_type", 
+                         metric = "total")
+portal.total.rabbit <- turnover(df = filter(portal.species.abunds, taxa == "Rabbit"), 
+                         time.var = "year", 
+                         species.var = "taxon", 
+                         abundance.var = "n", 
+                         replicate.var = "plot_type", 
+                         metric = "total")
+portal.total.reptile <- turnover(df = filter(portal.species.abunds, taxa == "Reptile"), 
+                         time.var = "year", 
+                         species.var = "taxon", 
+                         abundance.var = "n", 
+                         replicate.var = "plot_type", 
+                         metric = "total")
+portal.total.bird <- turnover(df = filter(portal.species.abunds, taxa == "Bird"), 
+                         time.var = "year", 
+                         species.var = "taxon", 
+                         abundance.var = "n", 
+                         replicate.var = "plot_type", 
+                         metric = "total")
+portal.appearance.rodent <- turnover(df = filter(portal.species.abunds, taxa == "Rodent"), 
+                         time.var = "year", 
+                         species.var = "taxon", 
+                         abundance.var = "n", 
+                         replicate.var = "plot_type", 
+                         metric = "appearance")
+portal.appearance.reptile <- turnover(df = filter(portal.species.abunds, taxa == "Reptile"), 
+                         time.var = "year", 
+                         species.var = "taxon", 
+                         abundance.var = "n", 
+                         replicate.var = "plot_type", 
+                         metric = "appearance")
+portal.appearance.rabbit <- turnover(df = filter(portal.species.abunds, taxa == "Rabbit"), 
+                         time.var = "year", 
+                         species.var = "taxon", 
+                         abundance.var = "n", 
+                         replicate.var = "plot_type", 
+                         metric = "appearance")
+portal.appearance.bird <- turnover(df = filter(portal.species.abunds, taxa == "Bird"), 
+                         time.var = "year", 
+                         species.var = "taxon", 
+                         abundance.var = "n", 
+                         replicate.var = "plot_type", 
+                         metric = "appearance")
+
+portal.disappearance.rodent <- turnover(df = filter(portal.species.abunds, taxa == "Rodent"), 
+                         time.var = "year", 
+                         species.var = "taxon", 
+                         abundance.var = "n", 
+                         replicate.var = "plot_type", 
+                         metric = "disappearance")
+portal.disappearance.rabbit <- turnover(df = filter(portal.species.abunds, taxa == "Rabbit"), 
+                         time.var = "year", 
+                         species.var = "taxon", 
+                         abundance.var = "n", 
+                         replicate.var = "plot_type", 
+                         metric = "disappearance")
+portal.disappearance.reptile <- turnover(df = filter(portal.species.abunds, taxa == "Reptile"), 
+                         time.var = "year", 
+                         species.var = "taxon", 
+                         abundance.var = "n", 
+                         replicate.var = "plot_type", 
+                         metric = "disappearance")
+portal.disappearance.bird <- turnover(df = filter(portal.species.abunds, taxa == "Bird"), 
+                         time.var = "year", 
+                         species.var = "taxon", 
+                         abundance.var = "n", 
+                         replicate.var = "plot_type", 
+                         metric = "disappearance")
+portal.turnover.rodent <- full_join(portal.total.rodent, portal.disappearance.rodent) %>% full_join(portal.appearance.rodent)
+portal.turnover.rodent <- gather(portal.turnover.rodent, key = metric, value = turnover, total, appearance, disappearance)
+turn.plot.rodent <- ggplot(portal.turnover.rodent, aes(x=year, y=turnover, color=metric))+
+  geom_line(size = 1, show.legend = T) +
+  facet_wrap(~plot_type) +
+  xlim(1977, 2000) + xlab("Year") + ylab("Turnover") +
+  theme(legend.position = "bottom") + 
+  scale_color_grey()
+plot(turn.plot.rodent)
+
+portal.turnover.rabbit <- full_join(portal.total.rabbit, portal.disappearance.rabbit) %>% full_join(portal.appearance.rabbit)
+portal.turnover.rabbit <- gather(portal.turnover.rabbit, key = metric, value = turnover, total, appearance, disappearance)
+turn.plot.rabbit <- ggplot(portal.turnover.rabbit, aes(x=year, y=turnover, color=metric))+
+  geom_line(size = 1, show.legend = T) +
+  facet_wrap(~plot_type) +
+  xlim(1977, 2000) + xlab("Year") + ylab("Turnover") +
+  theme(legend.position = "bottom") + 
+  scale_color_grey()
+plot(turn.plot.rabbit)
+
+portal.turnover.bird <- full_join(portal.total.bird, portal.disappearance.bird) %>% full_join(portal.appearance.bird)
+portal.turnover.bird <- gather(portal.turnover.bird, key = metric, value = turnover, total, appearance, disappearance)
+turn.plot.bird <- ggplot(portal.turnover.bird, aes(x=year, y=turnover, color=metric))+
+  geom_line(size = 1, show.legend = T) +
+  facet_wrap(~plot_type) +
+  xlim(1977, 2000) + xlab("Year") + ylab("Turnover") +
+  theme(legend.position = "bottom") + 
+  scale_color_grey()
+plot(turn.plot.bird)
 
 ```
 
@@ -191,6 +401,9 @@ In the R code chunk below, do the following:
 a. How does temporal turnover relate to spatial turnover?
 b. Which taxonomic group appears to be the most variable? Which group appears to be the least variable?
 
+> ***Answer 5a***: Temporal turnover is the first dirivatiove of spatial turnover in respect ot time.
+> ***Answer 5b***: Birds appear to be the most variable and rabbits are the least variable group.
+
 ### Mean Rank Shift
 In the code chunk below, do the following:
 
@@ -198,7 +411,23 @@ In the code chunk below, do the following:
 2. Plot MRS for each through time. 
 
 ```{r}
-
+portal.abunds.cont.rodent <- filter(portal.species.abunds, plot_type == "Control" | plot_type == "Rodent Exclosure")
+portal.rankshift <- rank_shift(
+  df = as.data.frame(portal.abunds.cont.rodent),
+  time.var = "year", 
+  species.var = "taxon", 
+  abundance.var = "n", 
+  replicate.var = "plot_type")
+portal.rankshift$year <- as.numeric(substr(portal.rankshift$year_pair, 6, 9))
+rankshift.plot <- ggplot(portal.rankshift, aes(x=year, y=MRS, color=plot_type)) +
+  geom_line(size = 1) +
+  xlim(1977, 2000) + 
+  xlab("Year") + 
+  ylab("Mean Rank Shift") +
+  scale_color_grey()
+plot(rankshift.plot)
+ 
+group_by(portal.rankshift, plot_type) %>% summarise(mean = mean(MRS), cv = sd(MRS)/mean)
 ```
 
 ***Question 6***:
@@ -216,7 +445,20 @@ In the R code chunk below, do the following:
 2. Plot the results.
 
 ```{r}
-
+portal.species.abunds$tot.abund <- rep(sum(portal.species.abunds$n),                                        length(portal.species.abunds$n))
+portal.hellinger.transf <- portal.species.abunds %>% mutate(hellinger.transf = sqrt(n/tot.abund))
+portal.change.int <- rate_change_interval(portal.hellinger.transf, time.var = "year", 
+                                          species.var = "taxon", 
+                                          abundance.var = "hellinger.transf", 
+                                          replicate.var = "plot_type")
+rate.plot <- ggplot(portal.change.int, aes(interval, distance)) + 
+  geom_point() + 
+  facet_wrap(~plot_type) + 
+  theme(strip.text.x = element_text(size = 7)) +
+  stat_smooth(method = "loess", se = F, size = 1) +
+  ylab("Hellinger Distance") +
+  xlab("The Time Interval (Years)")
+rate.plot
 ```
 
 ***Question 7***: 
@@ -235,7 +477,27 @@ In the R code chunk below, do the following:
 3. Test for a biodiversity-stability relationship by regressing community stability on mean inverse Simpson's diversity.
 
 ```{r}
+portal.stab <- community_stability(df = as.data.frame(portal.species.abunds), 
+                                   time.var = "year", 
+                                   abundance.var = "n", 
+                                   replicate.var = "plot_type")
+pander(portal.stab)
 
+portal.loreau <- synchrony(df = as.data.frame(portal.species.abunds), 
+                           time.var = "year", 
+                           species.var = "taxon", 
+                           abundance.var = "n", 
+                           replicate.var = "plot_type",
+                           metric = "Loreau")
+names(portal.loreau)[2] <- "loreau"
+portal.gross <- synchrony(df = as.data.frame(portal.species.abunds), 
+                           time.var = "year", 
+                           species.var = "taxon", 
+                           abundance.var = "n", 
+                           replicate.var = "plot_type",
+                           metric = "Gross")
+names(portal.gross)[2] <- "gross"
+pander(full_join(portal.loreau, portal.gross))
 
 ```
 
@@ -246,7 +508,7 @@ a. Which plot type has the highest stability in total abundance? How is stabilit
 b. In your own words, describe the concept of synchrony
 c. Interpret the results from the biodiversity-stability relationships you analyzed.
 
-> ***Answer 8a***:
+> ***Answer 8a***: Comtrol plot type  has the highest stability , 
 > ***Answer 8b***:
 > ***Answer 8c***:
 
